@@ -4,98 +4,368 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Logline · тест</title>
-<!-- Logline — мини-приложение. Шаг 1: проверка связи с ботом. -->
+<title>Logline · Новый поход</title>
+<!--
+  Logline — мини-приложение, экран «Новый поход» (шаг 7).
+  Данные: бот кладёт в ссылку параметр d (цель пользователя и его лодки).
+  Отправка: Telegram.WebApp.sendData → бот проверяет и сохраняет в logline.db.
+-->
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
+/* ===== Дизайн-переменные: весь внешний вид настраивается здесь =====
+   Сначала берутся цвета темы Telegram (--tg-theme-…), если их нет — запасные (--fb-…). */
 :root{
-  /* Цвета берутся из темы Telegram; после запятой — запасные, если открыто в браузере */
-  --bg:var(--tg-theme-secondary-bg-color,#F3F5F6);
-  --card:var(--tg-theme-bg-color,#FFFFFF);
-  --text:var(--tg-theme-text-color,#13212B);
-  --hint:var(--tg-theme-hint-color,#5B6B76);
-  --accent:var(--tg-theme-button-color,#0E4A6E);
-  --accentText:var(--tg-theme-button-text-color,#FFFFFF);
-  --line:color-mix(in srgb,var(--hint) 30%,transparent);
-  --ok:#1F7A5C;--warn:#B5600F;
+  --fb-bg:#EFEFF4; --fb-card:#FFFFFF; --fb-text:#13212B; --fb-hint:#6D7B86; --fb-accent:#0E6FA8; --fb-accentText:#FFFFFF;
+  --bg:var(--tg-theme-secondary-bg-color,var(--fb-bg));
+  --card:var(--tg-theme-bg-color,var(--fb-card));
+  --text:var(--tg-theme-text-color,var(--fb-text));
+  --hint:var(--tg-theme-hint-color,var(--fb-hint));
+  --accent:var(--tg-theme-button-color,var(--fb-accent));
+  --accentText:var(--tg-theme-button-text-color,var(--fb-accentText));
+  --line:color-mix(in srgb,var(--hint) 28%,transparent);
+  --soft:color-mix(in srgb,var(--accent) 12%,transparent);
+  --warn:#D9480F; --ok:#15803D;
+  --radius:14px; --radius-sm:10px;
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
 }
+@media (prefers-color-scheme: dark){
+  :root{ --fb-bg:#0F1419; --fb-card:#1C232B; --fb-text:#E8EDF1; --fb-hint:#8B98A5; --fb-accent:#4FA3E0; --fb-accentText:#0B1620; }
+}
+
 *{box-sizing:border-box}
-html,body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;font-size:15px;-webkit-tap-highlight-color:transparent}
-.test{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;text-align:center;padding:5px;background:rgba(217,130,43,.12);color:var(--warn)}
-.wrap{padding:18px 16px 32px;display:flex;flex-direction:column;gap:14px;max-width:520px;margin:0 auto}
-h1{margin:0;font-size:24px}
-.sub{color:var(--hint);margin-top:4px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 15px;display:flex;flex-direction:column;gap:8px}
-.row{display:flex;justify-content:space-between;gap:10px}
-.row span:first-child{color:var(--hint)}
-.yes{color:var(--ok);font-weight:600}.no{color:var(--warn);font-weight:600}
-button.main{width:100%;padding:14px;border:0;border-radius:12px;background:var(--accent);color:var(--accentText);font:inherit;font-weight:600;font-size:16px;cursor:pointer}
-button.main:disabled{opacity:.45}
-.note{font-size:13.5px;color:var(--hint);line-height:1.4}
-.msg{font-size:14px;line-height:1.4}
-.msg.warn{color:var(--warn)}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);font-size:15px;-webkit-tap-highlight-color:transparent}
+.app{max-width:480px;margin:0 auto;min-height:100vh}
+.banner{background:color-mix(in srgb,var(--warn) 14%,transparent);color:var(--warn);font-size:13px;padding:8px 14px;text-align:center}
+.scroll{padding:14px 12px 110px;display:flex;flex-direction:column;gap:14px}
+h1{margin:4px 4px 0;font-size:22px}
+.lead{margin:2px 4px 0;color:var(--hint);font-size:14px}
+
+.sec-title{font-size:12.5px;font-weight:600;color:var(--hint);text-transform:uppercase;letter-spacing:.04em;margin:0 4px 6px;display:flex;align-items:center;gap:6px}
+.req{color:var(--warn);font-weight:700}
+.card{background:var(--card);border-radius:var(--radius);overflow:hidden}
+.row{display:flex;align-items:center;gap:10px;padding:11px 14px;min-height:46px}
+.row + .row{border-top:1px solid var(--line)}
+.row > label:not(.switch),.row .lbl{flex:1 1 auto}
+.sub{display:block;font-size:12.5px;color:var(--hint);margin-top:1px}
+input,textarea{font:inherit;color:var(--text);background:transparent;border:0;outline:none}
+input[type=date]{text-align:right;color:var(--accent);min-width:0;flex:0 1 auto}
+input.txt{width:100%;padding:0}
+input.num{width:80px;text-align:right;color:var(--accent);font-weight:600}
+textarea{width:100%;min-height:74px;resize:vertical;padding:12px 14px;display:block}
+::placeholder{color:var(--hint);opacity:.8}
+
+.chips{display:flex;flex-wrap:wrap;gap:8px;padding:12px 14px}
+.chip{border:1.5px solid var(--line);background:transparent;color:var(--text);font:inherit;padding:8px 12px;border-radius:999px;cursor:pointer;text-align:left;line-height:1.2}
+.chip small{display:block;color:var(--hint);font-size:12px}
+.chip.on{border-color:var(--accent);background:var(--soft)}
+.chip.add{color:var(--accent);border-style:dashed}
+
+.seg{display:flex;margin:12px 14px;background:color-mix(in srgb,var(--hint) 16%,transparent);border-radius:var(--radius-sm);padding:2px}
+.seg button{flex:1;border:0;background:transparent;color:var(--text);font:inherit;padding:8px 4px;border-radius:8px;cursor:pointer}
+.seg button.on{background:var(--card);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.seg.mini{margin:0;flex:0 0 auto}
+.seg.mini button{flex:0 0 auto;padding:5px 10px;font-size:13.5px}
+
+.stepper{display:flex;align-items:center;gap:6px}
+.stepper button{width:32px;height:32px;border-radius:9px;border:0;background:var(--soft);color:var(--accent);font-size:19px;cursor:pointer;line-height:1}
+.stepper span{min-width:28px;text-align:center;font-weight:600}
+
+.switch{position:relative;display:block;width:46px;height:28px;flex:0 0 46px;cursor:pointer}
+.switch input{opacity:0;width:0;height:0;position:absolute}
+.switch i{position:absolute;inset:0;background:color-mix(in srgb,var(--hint) 35%,transparent);border-radius:999px;transition:.2s}
+.switch i:before{content:"";position:absolute;width:24px;height:24px;left:2px;top:2px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.switch input:checked + i{background:var(--ok)}
+.switch input:checked + i:before{transform:translateX(18px)}
+
+.pt{display:flex;align-items:center;gap:10px;padding:9px 14px}
+.pt + .pt{border-top:1px solid var(--line)}
+.pt .n{width:24px;height:24px;border-radius:50%;background:var(--accent);color:var(--accentText);font-size:12.5px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.pt .x{border:0;background:transparent;color:var(--hint);font-size:20px;cursor:pointer;padding:0 2px}
+.addpt{display:block;width:100%;text-align:left;border:0;border-top:1px solid var(--line);background:transparent;color:var(--accent);font:inherit;padding:12px 14px;cursor:pointer}
+
+.note{font-size:12.5px;color:var(--hint);margin:6px 6px 0;line-height:1.4}
+.err{color:var(--warn);font-size:13px;margin:6px 6px 0;display:none}
+.err.show{display:block}
+.levelup{border:1.5px solid color-mix(in srgb,var(--ok) 45%,transparent)}
+.lu-badge{background:color-mix(in srgb,var(--ok) 15%,transparent);color:var(--ok);font-size:11px;padding:2px 7px;border-radius:999px;text-transform:none;letter-spacing:0}
+
+.mainbar{position:fixed;left:0;right:0;bottom:0;z-index:4;padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--bg) 30%)}
+.mainbar button{display:block;width:100%;max-width:456px;margin:0 auto;border:0;border-radius:12px;padding:15px;background:var(--accent);color:var(--accentText);font:inherit;font-weight:600;font-size:16px;cursor:pointer}
+.mainbar .msg{max-width:456px;margin:0 auto 8px;background:var(--card);color:var(--warn);font-size:13.5px;padding:9px 12px;border-radius:var(--radius-sm);display:none;box-shadow:0 2px 10px rgba(0,0,0,.12)}
+.mainbar .msg.show{display:block}
+.hidden{display:none !important}
 </style>
 </head>
 <body>
-<div class="test">Тест · проверка связи с ботом</div>
-<div class="wrap">
-  <div>
-    <h1>⛵ Logline</h1>
-    <div class="sub" id="hello">Привет!</div>
+<div class="app">
+  <div class="banner hidden" id="notTg">Это страница мини-приложения Logline. Записать поход можно из бота @logline_sail_bot — кнопкой «⛵ Новый поход».</div>
+
+  <div class="scroll">
+    <div>
+      <h1>⛵ Новый поход</h1>
+      <p class="lead">Поля со <span class="req">*</span> обязательны, остальное — по желанию.</p>
+    </div>
+
+    <!-- Когда -->
+    <div>
+      <div class="sec-title">Когда <span class="req">*</span></div>
+      <div class="card">
+        <div class="row"><label for="d1">Начало</label><input type="date" id="d1"></div>
+        <div class="row"><label for="d2">Конец</label><input type="date" id="d2"></div>
+      </div>
+      <div class="note" id="dur"></div>
+      <div class="err" id="eDates">Укажи даты начала и конца.</div>
+    </div>
+
+    <!-- Лодка -->
+    <div>
+      <div class="sec-title">Лодка <span class="req">*</span></div>
+      <div class="card">
+        <div class="chips" id="boats"></div>
+        <div id="newBoat" class="hidden">
+          <div class="row"><input class="txt" id="bName" maxlength="60" placeholder="Название (например, Mila)"></div>
+          <div class="row"><input class="txt" id="bModel" maxlength="60" placeholder="Модель (например, Bavaria 46 Cruiser)"></div>
+          <div class="row"><label for="bLoa">Длина</label><input class="num" id="bLoa" inputmode="decimal" maxlength="6" placeholder="46">
+            <div class="seg mini" id="unit"><button type="button" data-v="ft" class="on">фт</button><button type="button" data-v="m">м</button></div></div>
+          <div class="row"><input class="txt" id="bBase" maxlength="80" placeholder="Чартерная компания / база"></div>
+        </div>
+      </div>
+      <div class="err" id="eBoat">Выбери лодку или впиши название новой.</div>
+    </div>
+
+    <!-- Роль -->
+    <div>
+      <div class="sec-title">Моя роль <span class="req">*</span></div>
+      <div class="card">
+        <div class="seg" id="role">
+          <button type="button" data-v="skipper">Шкипер</button>
+          <button type="button" data-v="mate">Помощник</button>
+          <button type="button" data-v="crew">Экипаж</button>
+        </div>
+      </div>
+      <div class="err" id="eRole">Выбери роль.</div>
+    </div>
+
+    <!-- Маршрут -->
+    <div>
+      <div class="sec-title">Маршрут <span class="req">*</span></div>
+      <div class="card">
+        <div class="row"><input class="txt" id="area" maxlength="100" placeholder="Район (например, Черногория)"></div>
+      </div>
+      <div style="height:8px"></div>
+      <div class="card" id="points"></div>
+      <div class="note">Точки по порядку: откуда вышли, где стояли, куда пришли. Хватит и одной, если вернулись в ту же марину.</div>
+      <div class="err" id="ePoints">Добавь хотя бы одну точку — откуда вышли.</div>
+    </div>
+
+    <!-- Пройдено -->
+    <div>
+      <div class="sec-title">Пройдено</div>
+      <div class="card">
+        <div class="row"><label for="miles">Мили <span class="req">*</span><span class="sub">с плоттера или примерно</span></label><input class="num" id="miles" inputmode="decimal" maxlength="7" placeholder="0"></div>
+        <div class="row"><span class="lbl">Ночные часы<span class="sub">ходовые часы между закатом и рассветом</span></span>
+          <div class="stepper" data-step="night"><button type="button">−</button><span>0</span><button type="button">＋</button></div></div>
+      </div>
+      <div class="err" id="eMiles">Впиши мили — хотя бы примерно.</div>
+    </div>
+
+    <!-- Level Up -->
+    <div id="luBlock" class="hidden">
+      <div class="sec-title">Для ценза <span class="lu-badge">Level Up</span></div>
+      <div class="card levelup">
+        <div class="row"><span class="lbl">Дни на борту<span class="sub" id="luDaysHint">подставятся по датам</span></span>
+          <div class="stepper" data-step="days"><button type="button">−</button><span>0</span><button type="button">＋</button></div></div>
+        <div class="row"><label for="tidal">Приливные воды</label><label class="switch"><input type="checkbox" id="tidal"><i></i></label></div>
+        <div class="row"><span class="lbl">Переходы от 60 миль<span class="sub">без захода в порт</span></span>
+          <div class="stepper" data-step="p60"><button type="button">−</button><span>0</span><button type="button">＋</button></div></div>
+      </div>
+    </div>
+
+    <!-- Заметка -->
+    <div>
+      <div class="sec-title">Заметка</div>
+      <div class="card"><textarea id="note" maxlength="1000" placeholder="Погода, экипаж, что запомнилось…"></textarea></div>
+      <div class="note">📷 Фото — пришлёшь боту в чат после сохранения.</div>
+    </div>
   </div>
 
-  <div class="card">
-    <div class="row"><span>Открыто в Telegram</span><span id="inTg">—</span></div>
-    <div class="row"><span>Версия Telegram API</span><span id="ver">—</span></div>
-    <div class="row"><span>Тема</span><span id="theme">—</span></div>
-  </div>
-
-  <button class="main" id="send">Отправить тест боту</button>
-  <div class="msg" id="msg"></div>
-
-  <div class="note">
-    После нажатия окно закроется, а бот ответит в чате «✅ Мини-приложение на связи!».
-    Работает, только если приложение открыто кнопкой «⛵ Новый поход» в меню бота.
-  </div>
+  <div class="mainbar"><div class="msg" id="msg"></div><button type="button" id="save">Сохранить поход</button></div>
 </div>
 
 <script>
 (function(){
-  var tg = window.Telegram && window.Telegram.WebApp;
-  // Вне Telegram скрипт тоже загружается, но платформа будет 'unknown'
-  var inTg = !!(tg && tg.platform && tg.platform !== 'unknown');
   var $ = function(id){ return document.getElementById(id); };
+  var tg = window.Telegram && window.Telegram.WebApp;
+  var inTg = !!(tg && tg.platform && tg.platform !== 'unknown');
+  if (inTg) { tg.ready(); tg.expand(); } else { $('notTg').classList.remove('hidden'); }
 
-  var name = 'моряк';
-  try { if (inTg && tg.initDataUnsafe.user && tg.initDataUnsafe.user.first_name) name = tg.initDataUnsafe.user.first_name; } catch(e){}
-  $('hello').textContent = 'Привет, ' + name + '!';
+  var MAX_POINTS = 30;
 
-  $('inTg').textContent = inTg ? 'да (' + tg.platform + ')' : 'нет';
-  $('inTg').className = inTg ? 'yes' : 'no';
-  $('ver').textContent = inTg ? tg.version : '—';
-  $('theme').textContent = inTg ? (tg.colorScheme === 'dark' ? 'тёмная' : 'светлая') : '—';
-
-  if (inTg) { tg.ready(); tg.expand(); }
-  else {
-    $('send').disabled = true;
-    $('msg').className = 'msg warn';
-    $('msg').textContent = 'Это страница мини-приложения. Открой её из бота @logline_sail_bot — кнопкой «⛵ Новый поход».';
-  }
-
-  $('send').addEventListener('click', function(){
-    var payload = JSON.stringify({ type: 'ping', v: 1, platform: tg.platform, ts: Date.now() });
+  // ---------- данные от бота (параметр d в ссылке) ----------
+  function readParams(){
     try {
-      if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
-      tg.sendData(payload);   // отправка боту; при успехе Telegram сам закроет окно
-    } catch (e) {
-      $('msg').className = 'msg warn';
-      $('msg').textContent = 'Не получилось отправить: ' + e;
-      return;
+      var d = new URLSearchParams(location.search).get('d');
+      if (!d) return {};
+      d = d.replace(/-/g,'+').replace(/_/g,'/');
+      while (d.length % 4) d += '=';
+      var bin = atob(d), bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return JSON.parse(new TextDecoder().decode(bytes)) || {};
+    } catch (e) { return {}; }
+  }
+  var P = readParams();
+  var BOATS = Array.isArray(P.boats) ? P.boats : [];
+  var LEVELUP = P.g === 'levelup';
+
+  var st = { boat:null, unit:'ft', role:null, night:0, days:0, p60:0, daysTouched:false, points:[''] };
+
+  function fmtNum(x){ if (x === null || x === undefined || x === '') return ''; x = Math.round(Number(x)*10)/10; return String(x).replace('.', ','); }
+  function word(n){ var a=Math.abs(n), m10=a%10, m100=a%100;
+    if (m10===1 && m100!==11) return 'день';
+    if (m10>=2 && m10<=4 && (m100<12 || m100>14)) return 'дня';
+    return 'дней'; }
+  function bytes(s){ return new TextEncoder().encode(s).length; }
+  function selectIn(box, btn){ [].forEach.call(box.children, function(c){ c.classList.toggle('on', c===btn); }); }
+
+  // ---------- лодки ----------
+  function renderBoats(){
+    var box = $('boats'); box.innerHTML = '';
+    BOATS.forEach(function(b){
+      var c = document.createElement('button'); c.type='button'; c.className='chip'; c.dataset.boat=String(b.id);
+      c.appendChild(document.createTextNode(b.n));
+      var details = [b.m, b.l ? fmtNum(b.l) + (b.u === 'm' ? ' м' : ' фт') : '', b.b].filter(Boolean).join(' · ');
+      if (details) { var s = document.createElement('small'); s.textContent = details; c.appendChild(s); }
+      box.appendChild(c);
+    });
+    var add = document.createElement('button'); add.type='button'; add.className='chip add'; add.dataset.boat='new'; add.textContent='＋ Новая лодка';
+    box.appendChild(add);
+  }
+  function selectBoat(v){
+    st.boat = v;
+    document.querySelectorAll('#boats .chip').forEach(function(c){ c.classList.toggle('on', c.dataset.boat===v); });
+    $('newBoat').classList.toggle('hidden', v!=='new');
+    $('eBoat').classList.remove('show');
+  }
+  renderBoats();
+  if (!BOATS.length) selectBoat('new');   // первый поход — сразу поля новой лодки
+  $('boats').addEventListener('click', function(e){ var c = e.target.closest('.chip'); if (c) selectBoat(c.dataset.boat); });
+  $('unit').addEventListener('click', function(e){
+    var b = e.target.closest('button'); if(!b) return;
+    st.unit = b.dataset.v; selectIn(this, b);
+    $('bLoa').placeholder = st.unit==='ft' ? '46' : '14';
+  });
+
+  // ---------- роль ----------
+  $('role').addEventListener('click', function(e){
+    var b = e.target.closest('button'); if(!b) return;
+    st.role = b.dataset.v; selectIn(this, b); $('eRole').classList.remove('show');
+  });
+
+  // ---------- даты ----------
+  function span(){
+    if (!$('d1').value || !$('d2').value) return null;
+    var a = new Date($('d1').value + 'T00:00:00Z'), b = new Date($('d2').value + 'T00:00:00Z');
+    return Math.round((b - a)/86400000) + 1;
+  }
+  function onDates(){
+    var n = span();
+    $('eDates').classList.remove('show');
+    if (n !== null && n < 1) { $('eDates').textContent = 'Конец раньше начала — проверь даты.'; $('eDates').classList.add('show'); }
+    $('dur').textContent = (n && n > 0) ? n + ' ' + word(n) : '';
+    if (n && n > 0) {
+      $('luDaysHint').textContent = 'по датам — ' + n + ', поправь, если ночевал на берегу';
+      if (!st.daysTouched || st.days > n) { st.days = n; setStep('days'); }
     }
-    // Если окно не закрылось — значит, приложение открыто не из кнопки меню
+  }
+  $('d1').addEventListener('change', function(){ if ($('d1').value && !$('d2').value) $('d2').value = $('d1').value; onDates(); });
+  $('d2').addEventListener('change', onDates);
+
+  // ---------- счётчики ----------
+  function setStep(key){ document.querySelector('[data-step="'+key+'"] span').textContent = st[key]; }
+  document.querySelectorAll('.stepper').forEach(function(s){
+    var key = s.dataset.step, btns = s.querySelectorAll('button');
+    btns[0].addEventListener('click', function(){ st[key] = Math.max(0, st[key]-1); if(key==='days') st.daysTouched=true; setStep(key); });
+    btns[1].addEventListener('click', function(){
+      var max = key==='days' ? (span() || 0) : 5000;
+      st[key] = Math.min(max, st[key]+1); if(key==='days') st.daysTouched=true; setStep(key);
+    });
+  });
+
+  // ---------- точки маршрута ----------
+  function renderPoints(){
+    var box = $('points'); box.innerHTML = '';
+    st.points.forEach(function(p, i){
+      var row = document.createElement('div'); row.className = 'pt';
+      var n = document.createElement('span'); n.className='n'; n.textContent = i+1; row.appendChild(n);
+      var inp = document.createElement('input'); inp.className='txt'; inp.value=p; inp.maxLength=80;
+      inp.placeholder = i===0 ? 'Откуда вышли (марина, порт)' : 'Следующая точка';
+      inp.addEventListener('input', function(){ st.points[i] = inp.value; $('ePoints').classList.remove('show'); });
+      row.appendChild(inp);
+      if (st.points.length > 1) {
+        var x = document.createElement('button'); x.type='button'; x.className='x'; x.textContent='×'; x.setAttribute('aria-label','Убрать точку');
+        x.addEventListener('click', function(){ st.points.splice(i,1); renderPoints(); });
+        row.appendChild(x);
+      }
+      box.appendChild(row);
+    });
+    if (st.points.length < MAX_POINTS) {
+      var add = document.createElement('button'); add.type='button'; add.className='addpt'; add.textContent='＋ Добавить точку';
+      add.addEventListener('click', function(){ st.points.push(''); renderPoints(); var all=box.querySelectorAll('input'); all[all.length-1].focus(); });
+      box.appendChild(add);
+    }
+  }
+  renderPoints();
+
+  if (LEVELUP) $('luBlock').classList.remove('hidden');
+  $('miles').addEventListener('input', function(){ $('eMiles').classList.remove('show'); });
+
+  // ---------- сохранить ----------
+  function showMsg(text){ $('msg').textContent = text; $('msg').classList.add('show'); }
+
+  $('save').addEventListener('click', function(){
+    $('msg').classList.remove('show');
+    var ok = true, n = span();
+    if (!n || n < 1) { if (!n) $('eDates').textContent = 'Укажи даты начала и конца.'; $('eDates').classList.add('show'); ok = false; }
+
+    var boat = null;
+    if (st.boat === 'new') {
+      var name = $('bName').value.trim();
+      if (name) boat = { 'new': { name:name, model:$('bModel').value.trim(), loa:$('bLoa').value.trim().replace(',', '.'), unit:st.unit, base:$('bBase').value.trim() } };
+    } else if (st.boat) {
+      boat = { id: Number(st.boat) };
+    }
+    if (!boat) { $('eBoat').classList.add('show'); ok = false; }
+    if (!st.role) { $('eRole').classList.add('show'); ok = false; }
+
+    var pts = st.points.map(function(p){ return p.trim(); }).filter(Boolean);
+    if (!pts.length) { $('ePoints').classList.add('show'); ok = false; }
+
+    var miles = parseFloat(($('miles').value || '').replace(',', '.'));
+    if (!(miles > 0)) { $('eMiles').classList.add('show'); ok = false; }
+
+    if (!ok) { var e1 = document.querySelector('.err.show'); if (e1) e1.scrollIntoView({behavior:'smooth', block:'center'}); return; }
+
+    var payload = {
+      type:'trip', v:1,
+      d1:$('d1').value, d2:$('d2').value,
+      boat:boat, role:st.role,
+      area:$('area').value.trim(), points:pts,
+      miles:miles, night:st.night,
+      lu: LEVELUP ? { days:st.days, tidal:$('tidal').checked, p60:st.p60 } : null,
+      note:$('note').value.trim()
+    };
+    var json = JSON.stringify(payload);
+    if (bytes(json) > 4096) { showMsg('Слишком много текста для одной записи — сократи заметку или названия точек.'); return; }
+    if (!inTg) { showMsg('Форма заполнена верно. Отправка работает только внутри Telegram — открой из бота.'); return; }
+
+    try {
+      if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+      tg.sendData(json);   // при успехе Telegram сам закроет окно
+    } catch (e) {
+      showMsg('Не получилось отправить: ' + e); return;
+    }
     setTimeout(function(){
-      $('msg').className = 'msg warn';
-      $('msg').textContent = 'Окно не закрылось — похоже, приложение открыто не из кнопки «⛵ Новый поход» внизу чата. Закрой его и открой этой кнопкой.';
+      showMsg('Окно не закрылось — похоже, приложение открыто не из кнопки «⛵ Новый поход» внизу чата. Закрой его и открой этой кнопкой.');
     }, 1500);
   });
 })();
