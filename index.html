@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex, nofollow">
 <title>Logline · Новый поход</title>
 <!--
-  Logline — мини-приложение, экран «Новый поход» (шаг 7).
+  Logline — мини-приложение, экран «Новый поход» (шаг 7; приливные воды «нет / весь / часть» — шаг 8).
   Данные: бот кладёт в ссылку параметр d (цель пользователя и его лодки).
   Отправка: Telegram.WebApp.sendData → бот проверяет и сохраняет в logline.db.
 -->
@@ -94,6 +94,8 @@ textarea{width:100%;min-height:74px;resize:vertical;padding:12px 14px;display:bl
 .mainbar .msg{max-width:456px;margin:0 auto 8px;background:var(--card);color:var(--warn);font-size:13.5px;padding:9px 12px;border-radius:var(--radius-sm);display:none;box-shadow:0 2px 10px rgba(0,0,0,.12)}
 .mainbar .msg.show{display:block}
 .hidden{display:none !important}
+/* строки внутри блока «частично» и строка после него — с линией-разделителем */
+#tidalPart .row,#tidalPart + .row{border-top:1px solid var(--line)}
 </style>
 </head>
 <body>
@@ -175,10 +177,17 @@ textarea{width:100%;min-height:74px;resize:vertical;padding:12px 14px;display:bl
       <div class="card levelup">
         <div class="row"><span class="lbl">Дни на борту<span class="sub" id="luDaysHint">подставятся по датам</span></span>
           <div class="stepper" data-step="days"><button type="button">−</button><span>0</span><button type="button">＋</button></div></div>
-        <div class="row"><label for="tidal">Приливные воды</label><label class="switch"><input type="checkbox" id="tidal"><i></i></label></div>
+        <div class="row"><span class="lbl">Приливные воды<span class="sub">Средиземное, Адриатика, Балтика — неприливные</span></span>
+          <div class="seg mini" id="tidal"><button type="button" data-v="none" class="on">Нет</button><button type="button" data-v="all">Весь</button><button type="button" data-v="part">Часть</button></div></div>
+        <div id="tidalPart" class="hidden">
+          <div class="row"><span class="lbl">Дней в приливных</span>
+            <div class="stepper" data-step="tdays"><button type="button">−</button><span>0</span><button type="button">＋</button></div></div>
+          <div class="row"><label for="tmiles">Миль в приливных</label><input class="num" id="tmiles" inputmode="decimal" maxlength="7" placeholder="0"></div>
+        </div>
         <div class="row"><span class="lbl">Переходы от 60 миль<span class="sub">без захода в порт</span></span>
           <div class="stepper" data-step="p60"><button type="button">−</button><span>0</span><button type="button">＋</button></div></div>
       </div>
+      <div class="err" id="eTidal">Укажи, сколько дней или миль было в приливных водах.</div>
     </div>
 
     <!-- Заметка -->
@@ -217,7 +226,8 @@ textarea{width:100%;min-height:74px;resize:vertical;padding:12px 14px;display:bl
   var BOATS = Array.isArray(P.boats) ? P.boats : [];
   var LEVELUP = P.g === 'levelup';
 
-  var st = { boat:null, unit:'ft', role:null, night:0, days:0, p60:0, daysTouched:false, points:[''] };
+  var st = { boat:null, unit:'ft', role:null, night:0, days:0, p60:0, daysTouched:false, points:[''],
+             tidal:'none', tdays:0 };
 
   function fmtNum(x){ if (x === null || x === undefined || x === '') return ''; x = Math.round(Number(x)*10)/10; return String(x).replace('.', ','); }
   function word(n){ var a=Math.abs(n), m10=a%10, m100=a%100;
@@ -274,7 +284,7 @@ textarea{width:100%;min-height:74px;resize:vertical;padding:12px 14px;display:bl
     $('dur').textContent = (n && n > 0) ? n + ' ' + word(n) : '';
     if (n && n > 0) {
       $('luDaysHint').textContent = 'по датам — ' + n + ', поправь, если ночевал на берегу';
-      if (!st.daysTouched || st.days > n) { st.days = n; setStep('days'); }
+      if (!st.daysTouched || st.days > n) { st.days = n; setStep('days'); clampTidal(); }
     }
   }
   $('d1').addEventListener('change', function(){ if ($('d1').value && !$('d2').value) $('d2').value = $('d1').value; onDates(); });
@@ -282,14 +292,29 @@ textarea{width:100%;min-height:74px;resize:vertical;padding:12px 14px;display:bl
 
   // ---------- счётчики ----------
   function setStep(key){ document.querySelector('[data-step="'+key+'"] span').textContent = st[key]; }
+  // дней в приливных не может быть больше, чем дней на борту
+  function clampTidal(){ if (st.tdays > st.days) { st.tdays = st.days; setStep('tdays'); } }
   document.querySelectorAll('.stepper').forEach(function(s){
     var key = s.dataset.step, btns = s.querySelectorAll('button');
-    btns[0].addEventListener('click', function(){ st[key] = Math.max(0, st[key]-1); if(key==='days') st.daysTouched=true; setStep(key); });
+    btns[0].addEventListener('click', function(){
+      st[key] = Math.max(0, st[key]-1); if(key==='days'){ st.daysTouched=true; clampTidal(); } setStep(key);
+      $('eTidal').classList.remove('show');
+    });
     btns[1].addEventListener('click', function(){
-      var max = key==='days' ? (span() || 0) : 5000;
+      var max = key==='days' ? (span() || 0) : key==='tdays' ? st.days : 5000;
       st[key] = Math.min(max, st[key]+1); if(key==='days') st.daysTouched=true; setStep(key);
+      $('eTidal').classList.remove('show');
     });
   });
+
+  // ---------- приливные воды: нет / весь поход / частично ----------
+  $('tidal').addEventListener('click', function(e){
+    var b = e.target.closest('button'); if(!b) return;
+    st.tidal = b.dataset.v; selectIn(this, b);
+    $('tidalPart').classList.toggle('hidden', st.tidal !== 'part');
+    $('eTidal').classList.remove('show');
+  });
+  $('tmiles').addEventListener('input', function(){ $('eTidal').classList.remove('show'); });
 
   // ---------- точки маршрута ----------
   function renderPoints(){
@@ -343,6 +368,19 @@ textarea{width:100%;min-height:74px;resize:vertical;padding:12px 14px;display:bl
     var miles = parseFloat(($('miles').value || '').replace(',', '.'));
     if (!(miles > 0)) { $('eMiles').classList.add('show'); ok = false; }
 
+    var tmiles = null;
+    if (LEVELUP && st.tidal === 'part') {
+      tmiles = parseFloat(($('tmiles').value || '').replace(',', '.'));
+      if (isNaN(tmiles)) tmiles = 0;
+      if (tmiles < 0 || (miles > 0 && tmiles > miles)) {
+        $('eTidal').textContent = 'Миль в приливных водах не может быть больше, чем всего за поход.';
+        $('eTidal').classList.add('show'); ok = false;
+      } else if (!st.tdays && !tmiles) {
+        $('eTidal').textContent = 'Укажи, сколько дней или миль было в приливных водах.';
+        $('eTidal').classList.add('show'); ok = false;
+      }
+    }
+
     if (!ok) { var e1 = document.querySelector('.err.show'); if (e1) e1.scrollIntoView({behavior:'smooth', block:'center'}); return; }
 
     var payload = {
@@ -351,7 +389,9 @@ textarea{width:100%;min-height:74px;resize:vertical;padding:12px 14px;display:bl
       boat:boat, role:st.role,
       area:$('area').value.trim(), points:pts,
       miles:miles, night:st.night,
-      lu: LEVELUP ? { days:st.days, tidal:$('tidal').checked, p60:st.p60 } : null,
+      lu: LEVELUP ? { days:st.days, tidal:st.tidal, p60:st.p60,
+                      tdays: st.tidal === 'part' ? st.tdays : null,
+                      tmiles: st.tidal === 'part' ? tmiles : null } : null,
       note:$('note').value.trim()
     };
     var json = JSON.stringify(payload);
