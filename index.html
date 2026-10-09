@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Logline · тест</title>
+<!-- Logline — мини-приложение. Шаг 1: проверка связи с ботом. -->
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{
+  /* Цвета берутся из темы Telegram; после запятой — запасные, если открыто в браузере */
+  --bg:var(--tg-theme-secondary-bg-color,#F3F5F6);
+  --card:var(--tg-theme-bg-color,#FFFFFF);
+  --text:var(--tg-theme-text-color,#13212B);
+  --hint:var(--tg-theme-hint-color,#5B6B76);
+  --accent:var(--tg-theme-button-color,#0E4A6E);
+  --accentText:var(--tg-theme-button-text-color,#FFFFFF);
+  --line:color-mix(in srgb,var(--hint) 30%,transparent);
+  --ok:#1F7A5C;--warn:#B5600F;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;font-size:15px;-webkit-tap-highlight-color:transparent}
+.test{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;text-align:center;padding:5px;background:rgba(217,130,43,.12);color:var(--warn)}
+.wrap{padding:18px 16px 32px;display:flex;flex-direction:column;gap:14px;max-width:520px;margin:0 auto}
+h1{margin:0;font-size:24px}
+.sub{color:var(--hint);margin-top:4px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 15px;display:flex;flex-direction:column;gap:8px}
+.row{display:flex;justify-content:space-between;gap:10px}
+.row span:first-child{color:var(--hint)}
+.yes{color:var(--ok);font-weight:600}.no{color:var(--warn);font-weight:600}
+button.main{width:100%;padding:14px;border:0;border-radius:12px;background:var(--accent);color:var(--accentText);font:inherit;font-weight:600;font-size:16px;cursor:pointer}
+button.main:disabled{opacity:.45}
+.note{font-size:13.5px;color:var(--hint);line-height:1.4}
+.msg{font-size:14px;line-height:1.4}
+.msg.warn{color:var(--warn)}
+</style>
+</head>
+<body>
+<div class="test">Тест · проверка связи с ботом</div>
+<div class="wrap">
+  <div>
+    <h1>⛵ Logline</h1>
+    <div class="sub" id="hello">Привет!</div>
+  </div>
+
+  <div class="card">
+    <div class="row"><span>Открыто в Telegram</span><span id="inTg">—</span></div>
+    <div class="row"><span>Версия Telegram API</span><span id="ver">—</span></div>
+    <div class="row"><span>Тема</span><span id="theme">—</span></div>
+  </div>
+
+  <button class="main" id="send">Отправить тест боту</button>
+  <div class="msg" id="msg"></div>
+
+  <div class="note">
+    После нажатия окно закроется, а бот ответит в чате «✅ Мини-приложение на связи!».
+    Работает, только если приложение открыто кнопкой «⛵ Новый поход» в меню бота.
+  </div>
+</div>
+
+<script>
+(function(){
+  var tg = window.Telegram && window.Telegram.WebApp;
+  // Вне Telegram скрипт тоже загружается, но платформа будет 'unknown'
+  var inTg = !!(tg && tg.platform && tg.platform !== 'unknown');
+  var $ = function(id){ return document.getElementById(id); };
+
+  var name = 'моряк';
+  try { if (inTg && tg.initDataUnsafe.user && tg.initDataUnsafe.user.first_name) name = tg.initDataUnsafe.user.first_name; } catch(e){}
+  $('hello').textContent = 'Привет, ' + name + '!';
+
+  $('inTg').textContent = inTg ? 'да (' + tg.platform + ')' : 'нет';
+  $('inTg').className = inTg ? 'yes' : 'no';
+  $('ver').textContent = inTg ? tg.version : '—';
+  $('theme').textContent = inTg ? (tg.colorScheme === 'dark' ? 'тёмная' : 'светлая') : '—';
+
+  if (inTg) { tg.ready(); tg.expand(); }
+  else {
+    $('send').disabled = true;
+    $('msg').className = 'msg warn';
+    $('msg').textContent = 'Это страница мини-приложения. Открой её из бота @logline_sail_bot — кнопкой «⛵ Новый поход».';
+  }
+
+  $('send').addEventListener('click', function(){
+    var payload = JSON.stringify({ type: 'ping', v: 1, platform: tg.platform, ts: Date.now() });
+    try {
+      if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+      tg.sendData(payload);   // отправка боту; при успехе Telegram сам закроет окно
+    } catch (e) {
+      $('msg').className = 'msg warn';
+      $('msg').textContent = 'Не получилось отправить: ' + e;
+      return;
+    }
+    // Если окно не закрылось — значит, приложение открыто не из кнопки меню
+    setTimeout(function(){
+      $('msg').className = 'msg warn';
+      $('msg').textContent = 'Окно не закрылось — похоже, приложение открыто не из кнопки «⛵ Новый поход» внизу чата. Закрой его и открой этой кнопкой.';
+    }, 1500);
+  });
+})();
+</script>
+</body>
+</html>
