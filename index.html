@@ -118,7 +118,11 @@ textarea{width:100%;min-height:74px;resize:vertical;padding:12px 14px;display:bl
 .mainbar .msg{max-width:456px;margin:0 auto 8px;background:var(--card);color:var(--warn);font-size:13.5px;padding:9px 12px;border-radius:var(--radius-sm);display:none;box-shadow:0 2px 10px rgba(0,0,0,.12)}
 .mainbar .msg.show{display:block}
 .hidden{display:none !important}
-button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+/* фокус: у кнопок — кольцо по их скруглению; у полей рамки нет, строка с полем чуть подсвечивается */
+button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+input:focus,input:focus-visible,textarea:focus,textarea:focus-visible{outline:none}
+.row:focus-within,textarea:focus{background:color-mix(in srgb,var(--brand-cyan) 8%,transparent)}
+.row,textarea{transition:background .15s}
 /* строки внутри блока «частично» и строка после него — с линией-разделителем */
 #tidalPart .row,#tidalPart + .row{border-top:1px solid var(--line)}
 </style>
