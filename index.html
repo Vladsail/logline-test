@@ -6,8 +6,9 @@
 <meta name="robots" content="noindex, nofollow">
 <title>Logline · Новый поход</title>
 <!--
-  Logline — мини-приложение, экран «Новый поход» (шаг 7; приливные воды «нет / весь / часть» — шаг 8).
-  Данные: бот кладёт в ссылку параметр d (цель пользователя и его лодки).
+  Logline — мини-приложение, экран «Новый поход» (шаг 7; приливные воды «нет / весь / часть» — шаг 8;
+  страны — 11.10.2026: выбираются из списка, в бот уходит код ISO).
+  Данные: бот кладёт в ссылку параметр d (цель пользователя, его лодки и страны, где он уже ходил).
   Отправка: Telegram.WebApp.sendData → бот проверяет и сохраняет в logline.db.
 -->
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -123,6 +124,11 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 input:focus,input:focus-visible,textarea:focus,textarea:focus-visible{outline:none}
 .row:focus-within,textarea:focus{background:color-mix(in srgb,var(--brand-cyan) 8%,transparent)}
 .row,textarea{transition:background .15s}
+/* страны: флаг + название; поиск страны */
+.chip .fl{margin-right:5px}
+#cSearchBox{border-top:1px solid var(--line)}
+#cFound:empty{display:none}
+.cempty{color:var(--hint);font-size:13px;padding:0 14px 12px}
 /* строки внутри блока «частично» и строка после него — с линией-разделителем */
 #tidalPart .row,#tidalPart + .row{border-top:1px solid var(--line)}
 </style>
@@ -181,7 +187,18 @@ input:focus,input:focus-visible,textarea:focus,textarea:focus-visible{outline:no
     <div>
       <div class="sec-title"><svg class="ic" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="18" r="2"/><path d="M8 17.2c4.5-.8 2.5-6.5 7-7.6" stroke-dasharray="2 2.6"/><path d="M17.5 3.5A3.5 3.5 0 0 1 21 7c0 2.6-3.5 5.5-3.5 5.5S14 9.6 14 7a3.5 3.5 0 0 1 3.5-3.5Z" fill="#EE7650" stroke="#EE7650"/></svg>Маршрут <span class="req">*</span></div>
       <div class="card">
-        <div class="row"><input class="txt" id="area" maxlength="100" placeholder="Район (например, Черногория)"></div>
+        <div class="row" style="padding-bottom:0;min-height:0"><span class="lbl">Страны<span class="sub">можно несколько, если переходили границу</span></span></div>
+        <div class="chips" id="countries"></div>
+        <div id="cSearchBox" class="hidden">
+          <div class="row"><input class="txt" id="cSearch" maxlength="40" autocomplete="off" placeholder="Начни писать: Хорв…, Croatia, Канары"></div>
+          <div class="chips" id="cFound"></div>
+          <div class="cempty hidden" id="cNone">Не нашёл такой страны в списке.</div>
+        </div>
+      </div>
+      <div class="err" id="eCountries">Не больше 10 стран на один поход.</div>
+      <div style="height:8px"></div>
+      <div class="card">
+        <div class="row"><input class="txt" id="area" maxlength="100" placeholder="Район (например, Далмация)"></div>
       </div>
       <div style="height:8px"></div>
       <div class="card" id="points"></div>
@@ -248,6 +265,111 @@ input:focus,input:focus-visible,textarea:focus,textarea:focus-visible{outline:no
   if (inTg && tg.onEvent) tg.onEvent('themeChanged', applyTheme);
 
   var MAX_POINTS = 30;
+  // Справочник стран — копия countries.py (код ISO, по-русски, по-английски, слова для поиска).
+  // В бот уходит только код. Списки сверяет tests/check_bot.py — менять в обоих местах.
+  var COUNTRIES = [
+    ["RU", "Россия", "Russia", ""],
+    ["HR", "Хорватия", "Croatia", "далмация истрия сплит"],
+    ["ME", "Черногория", "Montenegro", "монтенегро бока котор"],
+    ["GR", "Греция", "Greece", "киклады ионические саронический спорады"],
+    ["TR", "Турция", "Turkey", "турецкая ривьера бодрум фетхие мармарис"],
+    ["IT", "Италия", "Italy", "сардиния сицилия"],
+    ["ES", "Испания", "Spain", "канары балеары майорка ибица"],
+    ["FR", "Франция", "France", "корсика лазурный"],
+    ["PT", "Португалия", "Portugal", "азоры мадейра"],
+    ["MT", "Мальта", "Malta", ""],
+    ["CY", "Кипр", "Cyprus", ""],
+    ["SI", "Словения", "Slovenia", ""],
+    ["AL", "Албания", "Albania", ""],
+    ["BA", "Босния и Герцеговина", "Bosnia and Herzegovina", ""],
+    ["RS", "Сербия", "Serbia", "дунай"],
+    ["BG", "Болгария", "Bulgaria", ""],
+    ["RO", "Румыния", "Romania", ""],
+    ["MC", "Монако", "Monaco", ""],
+    ["GI", "Гибралтар", "Gibraltar", ""],
+    ["GB", "Великобритания", "United Kingdom", "англия шотландия солент британия"],
+    ["IE", "Ирландия", "Ireland", ""],
+    ["NL", "Нидерланды", "Netherlands", "голландия"],
+    ["BE", "Бельгия", "Belgium", ""],
+    ["DE", "Германия", "Germany", ""],
+    ["DK", "Дания", "Denmark", ""],
+    ["NO", "Норвегия", "Norway", "лофотены"],
+    ["SE", "Швеция", "Sweden", ""],
+    ["FI", "Финляндия", "Finland", "аланды"],
+    ["EE", "Эстония", "Estonia", ""],
+    ["LV", "Латвия", "Latvia", ""],
+    ["LT", "Литва", "Lithuania", ""],
+    ["PL", "Польша", "Poland", ""],
+    ["IS", "Исландия", "Iceland", ""],
+    ["AT", "Австрия", "Austria", ""],
+    ["CH", "Швейцария", "Switzerland", ""],
+    ["HU", "Венгрия", "Hungary", "балатон"],
+    ["BY", "Беларусь", "Belarus", "белоруссия"],
+    ["UA", "Украина", "Ukraine", ""],
+    ["GE", "Грузия", "Georgia", ""],
+    ["AZ", "Азербайджан", "Azerbaijan", ""],
+    ["KZ", "Казахстан", "Kazakhstan", ""],
+    ["EG", "Египет", "Egypt", ""],
+    ["IL", "Израиль", "Israel", ""],
+    ["AE", "ОАЭ", "United Arab Emirates", "эмираты дубай абу-даби"],
+    ["OM", "Оман", "Oman", ""],
+    ["MA", "Марокко", "Morocco", ""],
+    ["TN", "Тунис", "Tunisia", ""],
+    ["CV", "Кабо-Верде", "Cape Verde", "острова зелёного мыса"],
+    ["ZA", "ЮАР", "South Africa", "кейптаун"],
+    ["SC", "Сейшелы", "Seychelles", "сейшельские"],
+    ["MU", "Маврикий", "Mauritius", ""],
+    ["MV", "Мальдивы", "Maldives", ""],
+    ["MG", "Мадагаскар", "Madagascar", ""],
+    ["TZ", "Танзания", "Tanzania", "занзибар"],
+    ["TH", "Таиланд", "Thailand", "пхукет тайланд"],
+    ["MY", "Малайзия", "Malaysia", "лангкави"],
+    ["ID", "Индонезия", "Indonesia", "бали"],
+    ["PH", "Филиппины", "Philippines", ""],
+    ["VN", "Вьетнам", "Vietnam", ""],
+    ["LK", "Шри-Ланка", "Sri Lanka", ""],
+    ["IN", "Индия", "India", ""],
+    ["CN", "Китай", "China", ""],
+    ["JP", "Япония", "Japan", ""],
+    ["AU", "Австралия", "Australia", "уитсандей"],
+    ["NZ", "Новая Зеландия", "New Zealand", ""],
+    ["PF", "Французская Полинезия", "French Polynesia", "таити бора-бора"],
+    ["NC", "Новая Каледония", "New Caledonia", ""],
+    ["FJ", "Фиджи", "Fiji", ""],
+    ["TO", "Тонга", "Tonga", ""],
+    ["US", "США", "United States", "америка флорида"],
+    ["CA", "Канада", "Canada", ""],
+    ["MX", "Мексика", "Mexico", ""],
+    ["BZ", "Белиз", "Belize", ""],
+    ["PA", "Панама", "Panama", "сан-блас"],
+    ["CR", "Коста-Рика", "Costa Rica", ""],
+    ["CU", "Куба", "Cuba", ""],
+    ["BS", "Багамы", "Bahamas", "багамские"],
+    ["BM", "Бермуды", "Bermuda", ""],
+    ["TC", "Теркс и Кайкос", "Turks and Caicos Islands", ""],
+    ["DO", "Доминиканская Республика", "Dominican Republic", "доминикана"],
+    ["VG", "Британские Виргинские острова", "British Virgin Islands", "бви тортола"],
+    ["VI", "Виргинские острова (США)", "U.S. Virgin Islands", ""],
+    ["SX", "Синт-Мартен", "Sint Maarten", ""],
+    ["MF", "Сен-Мартен", "Saint Martin", ""],
+    ["BL", "Сен-Бартелеми", "Saint Barthélemy", "сен-барт"],
+    ["AG", "Антигуа и Барбуда", "Antigua and Barbuda", ""],
+    ["GP", "Гваделупа", "Guadeloupe", ""],
+    ["DM", "Доминика", "Dominica", ""],
+    ["MQ", "Мартиника", "Martinique", ""],
+    ["LC", "Сент-Люсия", "Saint Lucia", ""],
+    ["VC", "Сент-Винсент и Гренадины", "Saint Vincent and the Grenadines", "гренадины"],
+    ["GD", "Гренада", "Grenada", ""],
+    ["BB", "Барбадос", "Barbados", ""],
+    ["TT", "Тринидад и Тобаго", "Trinidad and Tobago", ""],
+    ["CW", "Кюрасао", "Curaçao", ""],
+    ["BR", "Бразилия", "Brazil", ""],
+    ["AR", "Аргентина", "Argentina", ""],
+    ["CL", "Чили", "Chile", ""],
+    ["EC", "Эквадор", "Ecuador", "галапагосы"]
+  ];
+  var POPULAR = ["RU", "HR", "ME", "GR", "TR", "IT", "ES", "FR"];
+  var MAX_COUNTRIES = 10;
 
   // ---------- данные от бота (параметр d в ссылке) ----------
   function readParams(){
@@ -265,8 +387,10 @@ input:focus,input:focus-visible,textarea:focus,textarea:focus-visible{outline:no
   var BOATS = Array.isArray(P.boats) ? P.boats : [];
   var LEVELUP = P.g === 'levelup';
 
+  var MINE = Array.isArray(P.c) ? P.c : [];   // страны, где пользователь уже ходил
+
   var st = { boat:null, unit:'ft', role:null, night:0, days:0, p60:0, daysTouched:false, points:[''],
-             tidal:'none', tdays:0 };
+             tidal:'none', tdays:0, countries:[] };
 
   function fmtNum(x){ if (x === null || x === undefined || x === '') return ''; x = Math.round(Number(x)*10)/10; return String(x).replace('.', ','); }
   function word(n){ var a=Math.abs(n), m10=a%10, m100=a%100;
@@ -303,6 +427,74 @@ input:focus,input:focus-visible,textarea:focus,textarea:focus-visible{outline:no
     st.unit = b.dataset.v; selectIn(this, b);
     $('bLoa').placeholder = st.unit==='ft' ? '46' : '14';
   });
+
+  // ---------- страны ----------
+  var BY_CODE = {};
+  COUNTRIES.forEach(function(c){ BY_CODE[c[0]] = c; });
+  function flag(code){ return String.fromCodePoint(0x1F1E6 + code.charCodeAt(0) - 65, 0x1F1E6 + code.charCodeAt(1) - 65); }
+  function norm(t){ return String(t || '').toLowerCase().replace(/ё/g, 'е').trim(); }
+  function countryChip(code, on){
+    var c = document.createElement('button'); c.type='button'; c.className='chip' + (on ? ' on' : ''); c.dataset.code = code;
+    var f = document.createElement('span'); f.className='fl'; f.textContent = flag(code); c.appendChild(f);
+    c.appendChild(document.createTextNode(BY_CODE[code][1]));
+    return c;
+  }
+  // На виду: выбранные (по порядку выбора) + где уже ходил + популярные — всего не меньше 8
+  function visibleCountries(){
+    var list = st.countries.slice();
+    MINE.concat(POPULAR).forEach(function(code){
+      if (BY_CODE[code] && list.indexOf(code) < 0 && list.length < Math.max(8, st.countries.length)) list.push(code);
+    });
+    return list;
+  }
+  function renderCountries(){
+    var box = $('countries'); box.innerHTML = '';
+    visibleCountries().forEach(function(code){ box.appendChild(countryChip(code, st.countries.indexOf(code) >= 0)); });
+    var add = document.createElement('button'); add.type='button'; add.className='chip add'; add.id='cMore'; add.textContent='＋ Другая страна';
+    box.appendChild(add);
+  }
+  function toggleCountry(code){
+    var i = st.countries.indexOf(code);
+    $('eCountries').classList.remove('show');
+    if (i >= 0) { st.countries.splice(i, 1); }
+    else if (st.countries.length >= MAX_COUNTRIES) { $('eCountries').classList.add('show'); return; }
+    else { st.countries.push(code); }
+    renderCountries();
+  }
+  // Поиск: по-русски, по-английски и по словам-подсказкам (Канары → Испания)
+  function findCountries(q){
+    q = norm(q); if (!q) return [];
+    var starts = [], inside = [];
+    COUNTRIES.forEach(function(c){
+      var names = [norm(c[1]), norm(c[2])], hay = names.concat(norm(c[3]).split(' ')).join(' | ');
+      if (names.some(function(n){ return n.indexOf(q) === 0; })) starts.push(c[0]);
+      else if (hay.indexOf(q) >= 0) inside.push(c[0]);
+    });
+    return starts.concat(inside).slice(0, 12);
+  }
+  function renderFound(){
+    var q = $('cSearch').value, box = $('cFound'); box.innerHTML = '';
+    var found = findCountries(q);
+    found.forEach(function(code){ box.appendChild(countryChip(code, st.countries.indexOf(code) >= 0)); });
+    $('cNone').classList.toggle('hidden', !norm(q) || found.length > 0);
+  }
+  function closeSearch(){ $('cSearch').value = ''; renderFound(); $('cSearchBox').classList.add('hidden'); }
+  renderCountries();
+  $('countries').addEventListener('click', function(e){
+    var c = e.target.closest('.chip'); if (!c) return;
+    if (c.id === 'cMore') {
+      var open = $('cSearchBox').classList.contains('hidden');
+      if (open) { $('cSearchBox').classList.remove('hidden'); $('cSearch').focus(); } else { closeSearch(); }
+      return;
+    }
+    toggleCountry(c.dataset.code);
+  });
+  $('cFound').addEventListener('click', function(e){
+    var c = e.target.closest('.chip'); if (!c) return;
+    toggleCountry(c.dataset.code);
+    if (st.countries.indexOf(c.dataset.code) >= 0) closeSearch(); else renderFound();
+  });
+  $('cSearch').addEventListener('input', renderFound);
 
   // ---------- роль ----------
   $('role').addEventListener('click', function(e){
@@ -426,6 +618,7 @@ input:focus,input:focus-visible,textarea:focus,textarea:focus-visible{outline:no
       type:'trip', v:1,
       d1:$('d1').value, d2:$('d2').value,
       boat:boat, role:st.role,
+      countries:st.countries.slice(),
       area:$('area').value.trim(), points:pts,
       miles:miles, night:st.night,
       lu: LEVELUP ? { days:st.days, tidal:st.tidal, p60:st.p60,
