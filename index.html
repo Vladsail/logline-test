@@ -205,9 +205,14 @@ input:focus,input:focus-visible,textarea:focus,textarea:focus-visible{outline:no
         </div>
       </div>
       <div class="err" id="eCountries">Не больше 10 стран на один поход.</div>
-      <div style="height:8px"></div>
-      <div class="card">
-        <div class="row"><input class="txt" id="area" maxlength="100" placeholder="Район (например, Далмация)"></div>
+      <!-- Район — только для ценза (цель Level Up или поля Level Up в профиле): ISSA просит походы
+           в разных районах. Остальным не показываем — хватает стран и точек (решено 11.10.2026) -->
+      <div id="areaBox" class="hidden">
+        <div style="height:8px"></div>
+        <div class="card">
+          <div class="row"><input class="txt" id="area" maxlength="100" placeholder="Район (например, Далмация)"></div>
+        </div>
+        <div class="note">Район — для ценза: например, ISSA просит походы в разных районах.</div>
       </div>
       <div style="height:8px"></div>
       <div class="card" id="points"></div>
@@ -674,6 +679,8 @@ input:focus,input:focus-visible,textarea:focus,textarea:focus-visible{outline:no
     $('delTrip').classList.remove('hidden');
   }
   if (E) fillEdit();
+  // район: при цели Level Up — всегда; у исправляемого похода район уже есть — тоже показываем
+  if (LEVELUP || (E && E.a)) $('areaBox').classList.remove('hidden');
 
   $('delTrip').addEventListener('click', function(){
     if (!E) return;
@@ -832,7 +839,7 @@ input:focus,input:focus-visible,textarea:focus,textarea:focus-visible{outline:no
       d1:$('d1').value, d2:$('d2').value,
       boat:boat, role:st.role,
       countries:st.countries.slice(),
-      area:$('area').value.trim(), points:pts,
+      area: $('areaBox').classList.contains('hidden') ? '' : $('area').value.trim(), points:pts,
       miles:miles, night:st.night,
       lu: LEVELUP ? { days:st.days, tidal:st.tidal, p60:st.p60,
                       tdays: st.tidal === 'part' ? st.tdays : null,
